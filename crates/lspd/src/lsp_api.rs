@@ -12,7 +12,8 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::fee::{calculate_fee, parse_amount, to_hex_amount};
 use crate::model::{GetInvoiceParams, NewInvoiceParams};
-use crate::order_store::{Order, OrderStatus, OrderStore};
+use crate::order_store::{Order, OrderStore};
+use crate::state_machine::OrderStatus;
 use crate::{FiberRpcClient, Result};
 
 #[derive(Debug, Clone)]
@@ -184,6 +185,7 @@ async fn buy(state: &AppState, params: Value) -> Result<Value> {
         net_amount: net_amount.to_string(),
         currency: state.config.currency.clone(),
         status: OrderStatus::AwaitingPayment,
+        status_reason: Some("hold invoice created".to_string()),
     };
     state.orders.insert(order.clone())?;
 
@@ -195,7 +197,8 @@ async fn buy(state: &AppState, params: Value) -> Result<Value> {
         "fee_amount": order.fee_amount,
         "net_amount": order.net_amount,
         "currency": order.currency,
-        "status": "AWAITING_PAYMENT",
+        "status": order.status.as_str(),
+        "status_reason": order.status_reason,
         "fiber_invoice_status": invoice.status,
     }))
 }
@@ -213,7 +216,8 @@ async fn get_order_status(state: &AppState, params: Value) -> Result<Value> {
 
     Ok(json!({
         "order_id": order.order_id,
-        "status": "AWAITING_PAYMENT",
+        "status": order.status.as_str(),
+        "status_reason": order.status_reason,
         "invoice_status": invoice.status,
         "payment_hash": order.payment_hash,
         "gross_amount": order.gross_amount,

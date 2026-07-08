@@ -27,6 +27,13 @@ pub enum Error {
     #[error("order not found: {0}")]
     OrderNotFound(String),
 
+    #[error("invalid order transition from {from} to {to}: {reason}")]
+    InvalidTransition {
+        from: String,
+        to: String,
+        reason: String,
+    },
+
     #[error("server error: {0}")]
     Server(String),
 }

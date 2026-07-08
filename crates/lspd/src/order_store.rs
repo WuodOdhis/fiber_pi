@@ -3,12 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
+use crate::state_machine::OrderStatus;
 use crate::{Error, Result};
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum OrderStatus {
-    AwaitingPayment,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Order {
@@ -24,6 +20,8 @@ pub struct Order {
     pub net_amount: String,
     pub currency: String,
     pub status: OrderStatus,
+    #[serde(default)]
+    pub status_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -50,5 +48,76 @@ impl OrderStore {
             .get(order_id)
             .cloned()
             .ok_or_else(|| Error::OrderNotFound(order_id.to_string()))
+    }
+
+    pub fn transition(
+        &self,
+        order_id: &str,
+        next_status: OrderStatus,
+        reason: impl Into<String>,
+    ) -> Result<Order> {
+        let mut orders = self
+            .orders
+            .lock()
+            .map_err(|_| Error::Server("order store lock poisoned".to_string()))?;
+        let order = orders
+            .get_mut(order_id)
+            .ok_or_else(|| Error::OrderNotFound(order_id.to_string()))?;
+
+        order.status.transition_to(next_status.clone())?;
+        order.status = next_status;
+        order.status_reason = Some(reason.into());
+        Ok(order.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_order(status: OrderStatus) -> Order {
+        Order {
+            order_id: "order-1".to_string(),
+            recipient_pubkey: "recipient".to_string(),
+            recipient_address: None,
+            invoice: "invoice".to_string(),
+            payment_hash: "0xhash".to_string(),
+            payment_preimage: "0xpreimage".to_string(),
+            gross_amount: "1000".to_string(),
+            fee_amount: "10".to_string(),
+            net_amount: "990".to_string(),
+            currency: "Fibt".to_string(),
+            status,
+            status_reason: None,
+        }
+    }
+
+    #[test]
+    fn store_applies_valid_transition() {
+        let store = OrderStore::default();
+        store
+            .insert(test_order(OrderStatus::AwaitingPayment))
+            .unwrap();
+
+        let updated = store
+            .transition("order-1", OrderStatus::PaymentHeld, "invoice held")
+            .unwrap();
+
+        assert_eq!(updated.status, OrderStatus::PaymentHeld);
+        assert_eq!(updated.status_reason.as_deref(), Some("invoice held"));
+    }
+
+    #[test]
+    fn store_rejects_invalid_transition() {
+        let store = OrderStore::default();
+        store
+            .insert(test_order(OrderStatus::AwaitingPayment))
+            .unwrap();
+
+        let err = store
+            .transition("order-1", OrderStatus::Completed, "skip ahead")
+            .unwrap_err();
+
+        assert!(matches!(err, Error::InvalidTransition { .. }));
     }
 }
