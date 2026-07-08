@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +23,8 @@ pub struct Order {
     pub status: OrderStatus,
     #[serde(default)]
     pub status_reason: Option<String>,
+    pub created_at_ms: u64,
+    pub updated_at_ms: u64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -50,6 +53,18 @@ impl OrderStore {
             .ok_or_else(|| Error::OrderNotFound(order_id.to_string()))
     }
 
+    pub fn list_active(&self) -> Result<Vec<Order>> {
+        let orders = self
+            .orders
+            .lock()
+            .map_err(|_| Error::Server("order store lock poisoned".to_string()))?;
+        Ok(orders
+            .values()
+            .filter(|order| !order.status.is_terminal())
+            .cloned()
+            .collect())
+    }
+
     pub fn transition(
         &self,
         order_id: &str,
@@ -67,8 +82,16 @@ impl OrderStore {
         order.status.transition_to(next_status.clone())?;
         order.status = next_status;
         order.status_reason = Some(reason.into());
+        order.updated_at_ms = now_ms();
         Ok(order.clone())
     }
+}
+
+pub fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -89,6 +112,8 @@ mod tests {
             currency: "Fibt".to_string(),
             status,
             status_reason: None,
+            created_at_ms: 1,
+            updated_at_ms: 1,
         }
     }
 
@@ -119,5 +144,22 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(err, Error::InvalidTransition { .. }));
+    }
+
+    #[test]
+    fn list_active_excludes_terminal_orders() {
+        let store = OrderStore::default();
+        store
+            .insert(test_order(OrderStatus::AwaitingPayment))
+            .unwrap();
+
+        let mut completed = test_order(OrderStatus::Completed);
+        completed.order_id = "order-2".to_string();
+        store.insert(completed).unwrap();
+
+        let active = store.list_active().unwrap();
+
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].order_id, "order-1");
     }
 }

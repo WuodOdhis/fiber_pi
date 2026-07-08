@@ -12,15 +12,16 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::fee::{calculate_fee, parse_amount, to_hex_amount};
 use crate::model::{GetInvoiceParams, NewInvoiceParams};
-use crate::order_store::{Order, OrderStore};
+use crate::order_store::{now_ms, Order, OrderStore};
 use crate::state_machine::OrderStatus;
+use crate::watchers::spawn_watchers;
 use crate::{FiberRpcClient, Result};
 
 #[derive(Debug, Clone)]
 pub struct AppState {
-    config: Config,
-    fiber: FiberRpcClient,
-    orders: OrderStore,
+    pub(crate) config: Config,
+    pub(crate) fiber: FiberRpcClient,
+    pub(crate) orders: OrderStore,
 }
 
 impl AppState {
@@ -74,9 +75,10 @@ struct GetOrderStatusParams {
 
 pub async fn serve(config: Config) -> Result<()> {
     let listen_addr = config.listen_addr;
-    let app = Router::new()
-        .route("/", post(handle_rpc))
-        .with_state(AppState::new(config));
+    let state = AppState::new(config);
+    spawn_watchers(state.clone());
+
+    let app = Router::new().route("/", post(handle_rpc)).with_state(state);
 
     let listener = TcpListener::bind(listen_addr).await.map_err(|err| {
         crate::Error::Server(format!("failed to bind LSP API at {listen_addr}: {err}"))
@@ -136,6 +138,8 @@ async fn get_info(state: &AppState) -> Result<Value> {
         "min_amount": state.config.min_amount.to_string(),
         "max_amount": state.config.max_amount.to_string(),
         "invoice_expiry_seconds": state.config.invoice_expiry_seconds,
+        "poll_interval_ms": state.config.poll_interval_ms,
+        "order_timeout_seconds": state.config.order_timeout_seconds,
     }))
 }
 
@@ -173,6 +177,7 @@ async fn buy(state: &AppState, params: Value) -> Result<Value> {
         .await?;
 
     let order_id = Uuid::new_v4().to_string();
+    let now = now_ms();
     let order = Order {
         order_id: order_id.clone(),
         recipient_pubkey: params.recipient_pubkey,
@@ -186,6 +191,8 @@ async fn buy(state: &AppState, params: Value) -> Result<Value> {
         currency: state.config.currency.clone(),
         status: OrderStatus::AwaitingPayment,
         status_reason: Some("hold invoice created".to_string()),
+        created_at_ms: now,
+        updated_at_ms: now,
     };
     state.orders.insert(order.clone())?;
 
@@ -219,6 +226,8 @@ async fn get_order_status(state: &AppState, params: Value) -> Result<Value> {
         "status": order.status.as_str(),
         "status_reason": order.status_reason,
         "invoice_status": invoice.status,
+        "created_at_ms": order.created_at_ms,
+        "updated_at_ms": order.updated_at_ms,
         "payment_hash": order.payment_hash,
         "gross_amount": order.gross_amount,
         "fee_amount": order.fee_amount,

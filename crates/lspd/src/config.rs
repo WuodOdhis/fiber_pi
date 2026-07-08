@@ -9,6 +9,8 @@ pub struct Config {
     pub max_amount: u128,
     pub currency: String,
     pub invoice_expiry_seconds: u64,
+    pub poll_interval_ms: u64,
+    pub order_timeout_seconds: u64,
 }
 
 impl Config {
@@ -28,6 +30,8 @@ impl Config {
             max_amount: read_u128("MAX_AMOUNT", 10_000_000_000_000)?,
             currency: std::env::var("FIBER_CURRENCY").unwrap_or_else(|_| "Fibt".to_string()),
             invoice_expiry_seconds: read_u64("INVOICE_EXPIRY_SECONDS", 3600)?,
+            poll_interval_ms: read_u64("POLL_INTERVAL_MS", 2000)?,
+            order_timeout_seconds: read_u64("ORDER_TIMEOUT_SECONDS", 7200)?,
         })
     }
 }
