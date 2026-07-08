@@ -20,4 +20,13 @@ pub enum Error {
 
     #[error("Fiber RPC response for {method} did not include result or error")]
     MissingResult { method: &'static str },
+
+    #[error("invalid amount: {0}")]
+    InvalidAmount(String),
+
+    #[error("order not found: {0}")]
+    OrderNotFound(String),
+
+    #[error("server error: {0}")]
+    Server(String),
 }

@@ -1,4 +1,4 @@
-use lspd::FiberRpcClient;
+use lspd::config::Config;
 
 #[tokio::main]
 async fn main() -> lspd::Result<()> {
@@ -9,11 +9,5 @@ async fn main() -> lspd::Result<()> {
         .with_writer(std::io::stderr)
         .init();
 
-    let url =
-        std::env::var("FIBER_RPC_URL").unwrap_or_else(|_| "http://127.0.0.1:8427".to_string());
-    let client = FiberRpcClient::new(url);
-    let info = client.node_info().await?;
-
-    println!("{}", serde_json::to_string_pretty(&info)?);
-    Ok(())
+    lspd::lsp_api::serve(Config::from_env()?).await
 }
