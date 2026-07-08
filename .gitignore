@@ -6,3 +6,4 @@ target/
 runtime/
 logs/
 *.log
+docs/implementation-plan.md
