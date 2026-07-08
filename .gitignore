@@ -7,3 +7,4 @@ runtime/
 logs/
 *.log
 docs/implementation-plan.md
+docs/captures/
