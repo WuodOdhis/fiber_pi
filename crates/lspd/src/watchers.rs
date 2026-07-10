@@ -1,8 +1,11 @@
 use tokio::time::{sleep, Duration};
 use tracing::{debug, error, info, warn};
 
+use crate::fee::{parse_amount, to_hex_amount};
 use crate::lsp_api::AppState;
-use crate::model::{GetInvoiceParams, ListChannelsParams};
+use crate::model::{
+    ConnectPeerParams, GetInvoiceParams, ListChannelsParams, OpenChannelParams, SettleInvoiceParams,
+};
 use crate::order_store::now_ms;
 use crate::state_machine::OrderStatus;
 use crate::Result;
@@ -13,6 +16,9 @@ pub fn spawn_watchers(state: AppState) {
 
     let channel_state = state.clone();
     tokio::spawn(async move { channel_watcher(channel_state).await });
+
+    let executor_state = state.clone();
+    tokio::spawn(async move { executor_watcher(executor_state).await });
 
     tokio::spawn(async move { timeout_watcher(state).await });
 }
@@ -30,6 +36,15 @@ async fn channel_watcher(state: AppState) {
     loop {
         if let Err(err) = poll_channels(&state).await {
             error!(%err, "channel watcher poll failed");
+        }
+        sleep(Duration::from_millis(state.config.poll_interval_ms)).await;
+    }
+}
+
+async fn executor_watcher(state: AppState) {
+    loop {
+        if let Err(err) = poll_executions(&state).await {
+            error!(%err, "executor watcher poll failed");
         }
         sleep(Duration::from_millis(state.config.poll_interval_ms)).await;
     }
@@ -143,6 +158,135 @@ async fn poll_channels(state: &AppState) -> Result<()> {
                     debug!(order_id = %order.order_id, state_name, "channel not ready yet")
                 }
             }
+        }
+    }
+
+    Ok(())
+}
+
+async fn poll_executions(state: &AppState) -> Result<()> {
+    for order in state.orders.list_active()? {
+        match order.status {
+            OrderStatus::PaymentHeld => start_channel_open(state, &order).await?,
+            OrderStatus::ChannelReady => settle_order(state, &order).await?,
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
+async fn start_channel_open(state: &AppState, order: &crate::order_store::Order) -> Result<()> {
+    state.orders.transition(
+        &order.order_id,
+        OrderStatus::OpeningChannel,
+        "starting Fiber channel open to recipient",
+    )?;
+
+    if let Err(err) = ensure_recipient_connected(state, order).await {
+        warn!(order_id = %order.order_id, %err, "failed to connect recipient before channel open");
+        state.orders.transition(
+            &order.order_id,
+            OrderStatus::Failed,
+            format!("failed to connect recipient: {err}"),
+        )?;
+        return Ok(());
+    }
+
+    let net_amount = parse_amount(&order.net_amount)?;
+    match state
+        .fiber
+        .open_channel(OpenChannelParams {
+            pubkey: order.recipient_pubkey.clone(),
+            funding_amount: to_hex_amount(net_amount),
+            public: Some(false),
+            one_way: Some(false),
+            funding_udt_type_script: None,
+            shutdown_script: None,
+            commitment_delay_epoch: None,
+            commitment_fee_rate: None,
+            funding_fee_rate: None,
+            tlc_expiry_delta: None,
+            tlc_min_value: None,
+            tlc_fee_proportional_millionths: None,
+            max_tlc_value_in_flight: None,
+            max_tlc_number_in_flight: None,
+        })
+        .await
+    {
+        Ok(opened) => {
+            info!(
+                order_id = %order.order_id,
+                temporary_channel_id = %opened.temporary_channel_id,
+                "Fiber channel open started"
+            );
+        }
+        Err(err) => {
+            warn!(order_id = %order.order_id, %err, "Fiber channel open failed");
+            state.orders.transition(
+                &order.order_id,
+                OrderStatus::Failed,
+                format!("Fiber open_channel failed: {err}"),
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn ensure_recipient_connected(
+    state: &AppState,
+    order: &crate::order_store::Order,
+) -> Result<()> {
+    let peers = state.fiber.list_peers().await?;
+    if peers
+        .peers
+        .iter()
+        .any(|peer| peer.pubkey == order.recipient_pubkey)
+    {
+        return Ok(());
+    }
+
+    state
+        .fiber
+        .connect_peer(ConnectPeerParams {
+            address: order.recipient_address.clone(),
+            pubkey: Some(order.recipient_pubkey.clone()),
+            save: Some(true),
+            addr_type: None,
+        })
+        .await
+}
+
+async fn settle_order(state: &AppState, order: &crate::order_store::Order) -> Result<()> {
+    state.orders.transition(
+        &order.order_id,
+        OrderStatus::Settling,
+        "settling Fiber hold invoice after channel readiness",
+    )?;
+
+    match state
+        .fiber
+        .settle_invoice(SettleInvoiceParams {
+            payment_hash: order.payment_hash.clone(),
+            payment_preimage: order.payment_preimage.clone(),
+        })
+        .await
+    {
+        Ok(()) => {
+            state.orders.transition(
+                &order.order_id,
+                OrderStatus::Completed,
+                format!("Fiber invoice settled; LSP fee earned {}", order.fee_amount),
+            )?;
+        }
+        Err(err) => {
+            warn!(order_id = %order.order_id, %err, "Fiber invoice settlement failed");
+            state.orders.transition(
+                &order.order_id,
+                OrderStatus::Failed,
+                format!("Fiber settle_invoice failed: {err}"),
+            )?;
         }
     }
 

@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::fee::{calculate_fee, parse_amount, to_hex_amount};
-use crate::model::{GetInvoiceParams, NewInvoiceParams};
+use crate::model::{GetInvoiceParams, ListChannelsParams, NewInvoiceParams};
 use crate::order_store::{initial_event, now_ms, Order, OrderStore};
 use crate::state_machine::OrderStatus;
 use crate::watchers::spawn_watchers;
@@ -224,6 +224,28 @@ async fn get_order_status(state: &AppState, params: Value) -> Result<Value> {
             payment_hash: order.payment_hash.clone(),
         })
         .await?;
+    let channels = state
+        .fiber
+        .list_channels(ListChannelsParams {
+            pubkey: Some(order.recipient_pubkey.clone()),
+            include_closed: Some(true),
+            only_pending: None,
+        })
+        .await?;
+    let channel_summaries = channels
+        .channels
+        .into_iter()
+        .map(|channel| {
+            json!({
+                "channel_id": channel.channel_id,
+                "state": channel.state.state_name,
+                "state_flags": channel.state.state_flags,
+                "local_balance": channel.local_balance,
+                "remote_balance": channel.remote_balance,
+                "failure_detail": channel.failure_detail,
+            })
+        })
+        .collect::<Vec<_>>();
 
     Ok(json!({
         "order_id": order.order_id,
@@ -233,6 +255,7 @@ async fn get_order_status(state: &AppState, params: Value) -> Result<Value> {
         "created_at_ms": order.created_at_ms,
         "updated_at_ms": order.updated_at_ms,
         "events": order.events,
+        "channels": channel_summaries,
         "payment_hash": order.payment_hash,
         "gross_amount": order.gross_amount,
         "fee_amount": order.fee_amount,
