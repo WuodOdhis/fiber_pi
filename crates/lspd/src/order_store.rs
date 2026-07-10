@@ -8,6 +8,13 @@ use crate::state_machine::OrderStatus;
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrderEvent {
+    pub timestamp_ms: u64,
+    pub status: OrderStatus,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Order {
     pub order_id: String,
     pub recipient_pubkey: String,
@@ -25,6 +32,8 @@ pub struct Order {
     pub status_reason: Option<String>,
     pub created_at_ms: u64,
     pub updated_at_ms: u64,
+    #[serde(default)]
+    pub events: Vec<OrderEvent>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -80,10 +89,28 @@ impl OrderStore {
             .ok_or_else(|| Error::OrderNotFound(order_id.to_string()))?;
 
         order.status.transition_to(next_status.clone())?;
+        let reason = reason.into();
         order.status = next_status;
-        order.status_reason = Some(reason.into());
+        order.status_reason = Some(reason.clone());
         order.updated_at_ms = now_ms();
+        order.events.push(OrderEvent {
+            timestamp_ms: order.updated_at_ms,
+            status: order.status.clone(),
+            reason,
+        });
         Ok(order.clone())
+    }
+}
+
+pub fn initial_event(
+    status: OrderStatus,
+    reason: impl Into<String>,
+    timestamp_ms: u64,
+) -> OrderEvent {
+    OrderEvent {
+        timestamp_ms,
+        status,
+        reason: reason.into(),
     }
 }
 
@@ -110,10 +137,11 @@ mod tests {
             fee_amount: "10".to_string(),
             net_amount: "990".to_string(),
             currency: "Fibt".to_string(),
-            status,
+            status: status.clone(),
             status_reason: None,
             created_at_ms: 1,
             updated_at_ms: 1,
+            events: vec![initial_event(status, "test order created", 1)],
         }
     }
 
@@ -130,6 +158,8 @@ mod tests {
 
         assert_eq!(updated.status, OrderStatus::PaymentHeld);
         assert_eq!(updated.status_reason.as_deref(), Some("invoice held"));
+        assert_eq!(updated.events.len(), 2);
+        assert_eq!(updated.events[1].status, OrderStatus::PaymentHeld);
     }
 
     #[test]

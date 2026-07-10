@@ -216,10 +216,15 @@ mod tests {
             fee_amount: "10".to_string(),
             net_amount: "990".to_string(),
             currency: "Fibt".to_string(),
-            status,
+            status: status.clone(),
             status_reason: None,
             created_at_ms,
             updated_at_ms: created_at_ms,
+            events: vec![crate::order_store::initial_event(
+                status,
+                "test order created",
+                created_at_ms,
+            )],
         }
     }
 

@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::fee::{calculate_fee, parse_amount, to_hex_amount};
 use crate::model::{GetInvoiceParams, NewInvoiceParams};
-use crate::order_store::{now_ms, Order, OrderStore};
+use crate::order_store::{initial_event, now_ms, Order, OrderStore};
 use crate::state_machine::OrderStatus;
 use crate::watchers::spawn_watchers;
 use crate::{FiberRpcClient, Result};
@@ -178,6 +178,8 @@ async fn buy(state: &AppState, params: Value) -> Result<Value> {
 
     let order_id = Uuid::new_v4().to_string();
     let now = now_ms();
+    let initial_status = OrderStatus::AwaitingPayment;
+    let initial_reason = "hold invoice created";
     let order = Order {
         order_id: order_id.clone(),
         recipient_pubkey: params.recipient_pubkey,
@@ -189,10 +191,11 @@ async fn buy(state: &AppState, params: Value) -> Result<Value> {
         fee_amount: fee_amount.to_string(),
         net_amount: net_amount.to_string(),
         currency: state.config.currency.clone(),
-        status: OrderStatus::AwaitingPayment,
-        status_reason: Some("hold invoice created".to_string()),
+        status: initial_status.clone(),
+        status_reason: Some(initial_reason.to_string()),
         created_at_ms: now,
         updated_at_ms: now,
+        events: vec![initial_event(initial_status, initial_reason, now)],
     };
     state.orders.insert(order.clone())?;
 
@@ -206,6 +209,7 @@ async fn buy(state: &AppState, params: Value) -> Result<Value> {
         "currency": order.currency,
         "status": order.status.as_str(),
         "status_reason": order.status_reason,
+        "events": order.events,
         "fiber_invoice_status": invoice.status,
     }))
 }
@@ -228,6 +232,7 @@ async fn get_order_status(state: &AppState, params: Value) -> Result<Value> {
         "invoice_status": invoice.status,
         "created_at_ms": order.created_at_ms,
         "updated_at_ms": order.updated_at_ms,
+        "events": order.events,
         "payment_hash": order.payment_hash,
         "gross_amount": order.gross_amount,
         "fee_amount": order.fee_amount,
