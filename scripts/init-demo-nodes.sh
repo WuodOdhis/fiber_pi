@@ -5,6 +5,15 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIBER_VERSION="v0.8.1"
 SRC_CONFIG="$ROOT_DIR/.fiber-src/fiber-$FIBER_VERSION/config/testnet/config.yml"
 RUNTIME_DIR="$ROOT_DIR/runtime"
+SENDER_NODE="${DEMO_SENDER_NODE:-sender}"
+LSP_NODE="${DEMO_LSP_NODE:-lsp}"
+RECIPIENT_NODE="${DEMO_RECIPIENT_NODE:-recipient}"
+SENDER_P2P_PORT="${DEMO_SENDER_P2P_PORT:-8628}"
+SENDER_RPC_PORT="${DEMO_SENDER_RPC_PORT:-8627}"
+LSP_P2P_PORT="${DEMO_LSP_P2P_PORT:-8728}"
+LSP_RPC_PORT="${DEMO_LSP_RPC_PORT:-8727}"
+RECIPIENT_P2P_PORT="${DEMO_RECIPIENT_P2P_PORT:-8828}"
+RECIPIENT_RPC_PORT="${DEMO_RECIPIENT_RPC_PORT:-8827}"
 
 if [ ! -f "$SRC_CONFIG" ]; then
   echo "[error] missing Fiber config: $SRC_CONFIG"
@@ -39,8 +48,8 @@ make_node() {
   echo "[init] $name -> p2p=$p2p_port rpc=$rpc_port dir=$node_dir"
 }
 
-make_node sender 8628 8627
-make_node lsp 8728 8727
-make_node recipient 8828 8827
+make_node "$SENDER_NODE" "$SENDER_P2P_PORT" "$SENDER_RPC_PORT"
+make_node "$LSP_NODE" "$LSP_P2P_PORT" "$LSP_RPC_PORT"
+make_node "$RECIPIENT_NODE" "$RECIPIENT_P2P_PORT" "$RECIPIENT_RPC_PORT"
 
 echo "[init] demo nodes initialized under $RUNTIME_DIR"
