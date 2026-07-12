@@ -9,7 +9,7 @@ use crate::model::{
 };
 use crate::order_store::now_ms;
 use crate::state_machine::OrderStatus;
-use crate::Result;
+use crate::{Error, Result};
 
 const CKB_CHANNEL_RESERVED_CAPACITY_SHANNONS: u128 = 9_900_000_000;
 const CKB_AUTO_ACCEPT_MIN_FUNDING_SHANNONS: u128 = 10_000_000_000;
@@ -317,7 +317,7 @@ async fn ensure_recipient_connected(
         return Ok(());
     }
 
-    state
+    match state
         .fiber
         .connect_peer(ConnectPeerParams {
             address: order.recipient_address.clone(),
@@ -326,6 +326,24 @@ async fn ensure_recipient_connected(
             addr_type: None,
         })
         .await
+    {
+        Ok(()) => Ok(()),
+        Err(Error::MissingResult { method }) if method == "connect_peer" => {
+            for _ in 0..10 {
+                sleep(Duration::from_secs(1)).await;
+                let peers = state.fiber.list_peers().await?;
+                if peers
+                    .peers
+                    .iter()
+                    .any(|peer| peer.pubkey == order.recipient_pubkey)
+                {
+                    return Ok(());
+                }
+            }
+            Err(Error::MissingResult { method })
+        }
+        Err(err) => Err(err),
+    }
 }
 
 async fn settle_order(state: &AppState, order: &crate::order_store::Order) -> Result<()> {
