@@ -4,11 +4,18 @@ use tracing::{debug, error, info, warn};
 use crate::fee::{parse_amount, to_hex_amount};
 use crate::lsp_api::AppState;
 use crate::model::{
-    ConnectPeerParams, GetInvoiceParams, ListChannelsParams, OpenChannelParams, SettleInvoiceParams,
+    ConnectPeerParams, GetInvoiceParams, GetPaymentParams, ListChannelsParams, OpenChannelParams,
+    SendPaymentParams, SettleInvoiceParams,
 };
 use crate::order_store::now_ms;
 use crate::state_machine::OrderStatus;
 use crate::Result;
+
+const CKB_CHANNEL_RESERVED_CAPACITY_SHANNONS: u128 = 9_900_000_000;
+const CKB_AUTO_ACCEPT_MIN_FUNDING_SHANNONS: u128 = 10_000_000_000;
+const CKB_AUTO_ACCEPT_MIN_TOTAL_FUNDING_SHANNONS: u128 =
+    CKB_CHANNEL_RESERVED_CAPACITY_SHANNONS + CKB_AUTO_ACCEPT_MIN_FUNDING_SHANNONS;
+const RECIPIENT_PAYMENT_TIMEOUT_SECONDS: u64 = 120;
 
 pub fn spawn_watchers(state: AppState) {
     let invoice_state = state.clone();
@@ -128,12 +135,19 @@ async fn poll_channels(state: &AppState) -> Result<()> {
             .fiber
             .list_channels(ListChannelsParams {
                 pubkey: Some(order.recipient_pubkey.clone()),
-                include_closed: None,
-                only_pending: Some(true),
+                include_closed: Some(true),
+                only_pending: None,
             })
             .await?;
 
-        for channel in channels.channels {
+        let mut failed_reason = None;
+        let mut has_live_opening = false;
+
+        for channel in channels
+            .channels
+            .into_iter()
+            .filter(|channel| channel_created_at_ms(&channel.created_at) >= order.updated_at_ms)
+        {
             match channel.state.state_name.as_str() {
                 "ChannelReady" => {
                     info!(order_id = %order.order_id, channel_id = %channel.channel_id, "channel ready");
@@ -144,24 +158,39 @@ async fn poll_channels(state: &AppState) -> Result<()> {
                     )?;
                     break;
                 }
-                "Closed" if channel.failure_detail.is_some() => {
-                    let reason = channel
-                        .failure_detail
-                        .unwrap_or_else(|| "channel closed during opening".to_string());
-                    warn!(order_id = %order.order_id, %reason, "channel opening failed");
-                    state
-                        .orders
-                        .transition(&order.order_id, OrderStatus::Failed, reason)?;
-                    break;
+                _ if channel.failure_detail.is_some() => {
+                    failed_reason = Some(
+                        channel
+                            .failure_detail
+                            .unwrap_or_else(|| "channel closed during opening".to_string()),
+                    );
                 }
                 state_name => {
+                    has_live_opening = true;
                     debug!(order_id = %order.order_id, state_name, "channel not ready yet")
                 }
+            }
+        }
+
+        let latest_order = state.orders.get(&order.order_id)?;
+        if latest_order.status == OrderStatus::OpeningChannel && !has_live_opening {
+            if let Some(reason) = failed_reason {
+                warn!(order_id = %order.order_id, %reason, "channel opening failed");
+                state
+                    .orders
+                    .transition(&order.order_id, OrderStatus::Failed, reason)?;
             }
         }
     }
 
     Ok(())
+}
+
+fn channel_created_at_ms(value: &str) -> u64 {
+    value
+        .strip_prefix("0x")
+        .and_then(|hex| u64::from_str_radix(hex, 16).ok())
+        .unwrap_or_default()
 }
 
 async fn poll_executions(state: &AppState) -> Result<()> {
@@ -183,6 +212,16 @@ async fn start_channel_open(state: &AppState, order: &crate::order_store::Order)
         "starting Fiber channel open to recipient",
     )?;
 
+    let net_amount = parse_amount(&order.net_amount)?;
+    if has_ready_recipient_capacity(state, order, net_amount).await? {
+        state.orders.transition(
+            &order.order_id,
+            OrderStatus::ChannelReady,
+            "existing Fiber channel has enough recipient capacity",
+        )?;
+        return Ok(());
+    }
+
     if let Err(err) = ensure_recipient_connected(state, order).await {
         warn!(order_id = %order.order_id, %err, "failed to connect recipient before channel open");
         state.orders.transition(
@@ -193,14 +232,20 @@ async fn start_channel_open(state: &AppState, order: &crate::order_store::Order)
         return Ok(());
     }
 
-    let net_amount = parse_amount(&order.net_amount)?;
+    let funding_amount = if order.currency == "Fibt" || order.currency == "Fibb" {
+        net_amount
+            .saturating_add(CKB_CHANNEL_RESERVED_CAPACITY_SHANNONS)
+            .max(CKB_AUTO_ACCEPT_MIN_TOTAL_FUNDING_SHANNONS)
+    } else {
+        net_amount
+    };
     match state
         .fiber
         .open_channel(OpenChannelParams {
             pubkey: order.recipient_pubkey.clone(),
-            funding_amount: to_hex_amount(net_amount),
+            funding_amount: to_hex_amount(funding_amount),
             public: Some(false),
-            one_way: Some(false),
+            one_way: Some(true),
             funding_udt_type_script: None,
             shutdown_script: None,
             commitment_delay_epoch: None,
@@ -234,6 +279,31 @@ async fn start_channel_open(state: &AppState, order: &crate::order_store::Order)
     Ok(())
 }
 
+async fn has_ready_recipient_capacity(
+    state: &AppState,
+    order: &crate::order_store::Order,
+    required_amount: u128,
+) -> Result<bool> {
+    let channels = state
+        .fiber
+        .list_channels(ListChannelsParams {
+            pubkey: Some(order.recipient_pubkey.clone()),
+            include_closed: Some(false),
+            only_pending: None,
+        })
+        .await?;
+
+    for channel in channels.channels {
+        if channel.state.state_name == "ChannelReady"
+            && parse_amount(&channel.local_balance)? >= required_amount
+        {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
 async fn ensure_recipient_connected(
     state: &AppState,
     order: &crate::order_store::Order,
@@ -262,8 +332,18 @@ async fn settle_order(state: &AppState, order: &crate::order_store::Order) -> Re
     state.orders.transition(
         &order.order_id,
         OrderStatus::Settling,
-        "settling Fiber hold invoice after channel readiness",
+        "paying recipient before settling Fiber hold invoice",
     )?;
+
+    if let Err(err) = pay_recipient(state, order).await {
+        warn!(order_id = %order.order_id, %err, "recipient payment failed");
+        state.orders.transition(
+            &order.order_id,
+            OrderStatus::Failed,
+            format!("Fiber recipient payment failed: {err}"),
+        )?;
+        return Ok(());
+    }
 
     match state
         .fiber
@@ -273,11 +353,14 @@ async fn settle_order(state: &AppState, order: &crate::order_store::Order) -> Re
         })
         .await
     {
-        Ok(()) => {
+        Ok(_) => {
             state.orders.transition(
                 &order.order_id,
                 OrderStatus::Completed,
-                format!("Fiber invoice settled; LSP fee earned {}", order.fee_amount),
+                format!(
+                    "recipient paid {}; Fiber invoice settled; LSP fee earned {}",
+                    order.net_amount, order.fee_amount
+                ),
             )?;
         }
         Err(err) => {
@@ -291,6 +374,62 @@ async fn settle_order(state: &AppState, order: &crate::order_store::Order) -> Re
     }
 
     Ok(())
+}
+
+async fn pay_recipient(state: &AppState, order: &crate::order_store::Order) -> Result<()> {
+    let payment = state
+        .fiber
+        .send_payment(SendPaymentParams {
+            target_pubkey: Some(order.recipient_pubkey.clone()),
+            amount: Some(to_hex_amount(parse_amount(&order.net_amount)?)),
+            payment_hash: None,
+            final_tlc_expiry_delta: None,
+            tlc_expiry_limit: None,
+            invoice: None,
+            timeout: Some(to_hex_amount(RECIPIENT_PAYMENT_TIMEOUT_SECONDS as u128)),
+            max_fee_amount: Some("0x0".to_string()),
+            max_fee_rate: None,
+            max_parts: None,
+            trampoline_hops: None,
+            keysend: Some(true),
+            udt_type_script: None,
+            allow_self_payment: None,
+            custom_records: None,
+            hop_hints: None,
+            dry_run: None,
+        })
+        .await?;
+
+    wait_for_payment_success(state, &payment.payment_hash).await
+}
+
+async fn wait_for_payment_success(state: &AppState, payment_hash: &str) -> Result<()> {
+    let attempts = RECIPIENT_PAYMENT_TIMEOUT_SECONDS / 2;
+    for _ in 0..attempts {
+        let payment = state
+            .fiber
+            .get_payment(GetPaymentParams {
+                payment_hash: payment_hash.to_string(),
+            })
+            .await?;
+
+        match payment.status.as_str() {
+            "Success" => return Ok(()),
+            "Failed" => {
+                return Err(crate::Error::Server(format!(
+                    "recipient keysend failed: {}",
+                    payment
+                        .failed_error
+                        .unwrap_or_else(|| "unknown payment error".to_string())
+                )))
+            }
+            _ => sleep(Duration::from_secs(2)).await,
+        }
+    }
+
+    Err(crate::Error::Server(format!(
+        "recipient keysend {payment_hash} did not complete before timeout"
+    )))
 }
 
 fn poll_timeouts(state: &AppState) -> Result<()> {

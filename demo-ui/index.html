@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fiber LSP Demo</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">Fiber LSP</div>
+          <h1>Receive-first liquidity console</h1>
+        </div>
+        <div class="network-pill"><span></span> testnet live</div>
+      </header>
+
+      <section class="metrics-grid" id="metrics"></section>
+
+      <section class="console-grid">
+        <div class="panel action-panel">
+          <div class="panel-head">
+            <h2>Order</h2>
+            <span id="orderStatus" class="status idle">idle</span>
+          </div>
+          <label class="field">
+            <span>Gross amount</span>
+            <input id="amount" inputmode="numeric" />
+          </label>
+          <button id="runBtn" class="run-btn">Run demo payment</button>
+          <div class="kv" id="orderKv"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Recipient Channel</h2>
+            <button id="refreshBtn" class="ghost-btn">Refresh</button>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Field</th><th>Before</th><th>After</th></tr>
+            </thead>
+            <tbody id="balanceRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel wide">
+        <div class="panel-head">
+          <h2>Order Audit Trail</h2>
+          <span class="muted">state machine events from lspd</span>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Status</th><th>Reason</th></tr>
+          </thead>
+          <tbody id="eventsBody"></tbody>
+        </table>
+      </section>
+
+      <section class="panel wide">
+        <div class="panel-head">
+          <h2>Fiber Channels</h2>
+          <span class="muted">recipient node view</span>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Channel</th><th>State</th><th>One-way</th><th>Local</th><th>Remote</th><th>Outpoint / Failure</th></tr>
+          </thead>
+          <tbody id="channelsBody"></tbody>
+        </table>
+      </section>
+
+      <section class="panel wide">
+        <div class="panel-head">
+          <h2>Execution Log</h2>
+          <span class="muted">RPC-level observability</span>
+        </div>
+        <div id="log" class="log"></div>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -5,9 +5,9 @@ use tracing::{debug, instrument};
 
 use crate::error::{Error, Result};
 use crate::model::{
-    ConnectPeerParams, GetInvoiceParams, InvoiceResult, ListChannelsParams, ListChannelsResult,
-    ListPeersResult, NewInvoiceParams, NodeInfo, OpenChannelParams, OpenChannelResult,
-    SettleInvoiceParams,
+    ConnectPeerParams, GetInvoiceParams, GetPaymentParams, InvoiceResult, ListChannelsParams,
+    ListChannelsResult, ListPeersResult, NewInvoiceParams, NodeInfo, OpenChannelParams,
+    OpenChannelResult, PaymentResult, SendPaymentParams, SettleInvoiceParams,
 };
 
 #[derive(Debug, Clone)]
@@ -75,8 +75,18 @@ impl FiberRpcClient {
     }
 
     #[instrument(skip(self, params), fields(url = %self.url, payment_hash = %params.payment_hash))]
-    pub async fn settle_invoice(&self, params: SettleInvoiceParams) -> Result<()> {
+    pub async fn settle_invoice(&self, params: SettleInvoiceParams) -> Result<Value> {
         self.call_one("settle_invoice", params).await
+    }
+
+    #[instrument(skip(self, params), fields(url = %self.url, target_pubkey = ?params.target_pubkey, invoice = ?params.invoice))]
+    pub async fn send_payment(&self, params: SendPaymentParams) -> Result<PaymentResult> {
+        self.call_one("send_payment", params).await
+    }
+
+    #[instrument(skip(self, params), fields(url = %self.url, payment_hash = %params.payment_hash))]
+    pub async fn get_payment(&self, params: GetPaymentParams) -> Result<PaymentResult> {
+        self.call_one("get_payment", params).await
     }
 
     #[instrument(skip(self, params), fields(url = %self.url, pubkey = %params.pubkey))]

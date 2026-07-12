@@ -3,6 +3,7 @@ target/
 .fiber/
 .fiber-src/
 .fiber-bin/
+.ckb-cli/
 runtime/
 logs/
 *.log

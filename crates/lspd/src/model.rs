@@ -90,6 +90,60 @@ pub struct SettleInvoiceParams {
     pub payment_preimage: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct SendPaymentParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_pubkey: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amount: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payment_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub final_tlc_expiry_delta: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tlc_expiry_limit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub invoice: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_fee_amount: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_fee_rate: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_parts: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trampoline_hops: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keysend: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub udt_type_script: Option<Script>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_self_payment: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_records: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hop_hints: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dry_run: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GetPaymentParams {
+    pub payment_hash: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PaymentResult {
+    pub payment_hash: String,
+    pub status: String,
+    pub created_at: String,
+    pub last_updated_at: String,
+    pub failed_error: Option<String>,
+    pub fee: String,
+    pub custom_records: Option<Value>,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct InvoiceData {
     pub timestamp: String,
@@ -162,6 +216,7 @@ pub struct ListChannelsParams {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ChannelState {
     pub state_name: String,
+    #[serde(default)]
     pub state_flags: String,
 }
 
