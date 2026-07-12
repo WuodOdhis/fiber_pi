@@ -39,8 +39,8 @@ make_node() {
   echo "[init] $name -> p2p=$p2p_port rpc=$rpc_port dir=$node_dir"
 }
 
-make_node sender 8328 8327
-make_node lsp 8428 8427
-make_node recipient 8528 8527
+make_node sender 8628 8627
+make_node lsp 8728 8727
+make_node recipient 8828 8827
 
 echo "[init] demo nodes initialized under $RUNTIME_DIR"

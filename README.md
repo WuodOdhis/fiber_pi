@@ -1,0 +1,231 @@
+# Fiber LSP
+
+Fiber LSP is a prototype liquidity service for receive-first payments on the Fiber Network.
+
+The problem is simple: a new wallet, merchant, or service may want to receive a Fiber payment before it has inbound liquidity. This daemon sits beside a funded Fiber node and acts as a lightweight LSP. It sells a sender-facing Fiber invoice, provisions or reuses recipient liquidity, pays the recipient over Fiber, and then settles the sender invoice.
+
+This is an MVP, not a production LSP. It is useful because it demonstrates the core receive-first flow with real Fiber RPC calls and real testnet channel state, while keeping the design small enough for wallets and services to inspect or adapt.
+
+## What Works
+
+The current daemon can:
+
+- create a Fiber hold invoice for a sender;
+- track the invoice until the sender payment is received;
+- connect the LSP Fiber node to the recipient node;
+- open a one-way recipient channel when recipient capacity is missing;
+- reuse an existing recipient channel when it already has enough local LSP balance;
+- pay the recipient the net amount with Fiber keysend;
+- settle the sender invoice only after the recipient payment succeeds;
+- expose order status, audit events, and recipient channel snapshots over JSON-RPC.
+
+The demo UI shows the same flow in a browser: order status, fee/net amounts, recipient balance before and after, audit trail, and recipient channel outpoint.
+
+## Payment Flow
+
+1. A client calls `buy` with a recipient Fiber pubkey and amount.
+2. The LSP daemon asks its Fiber node to create a sender-facing hold invoice.
+3. The sender pays that invoice over Fiber.
+4. The daemon observes the invoice move to `Received`.
+5. The daemon checks whether the LSP already has enough channel balance toward the recipient.
+6. If not, the LSP opens a private one-way Fiber channel to the recipient.
+7. Once the channel is ready, the LSP sends the recipient the net amount.
+8. After the recipient payment succeeds, the daemon settles the original sender invoice.
+
+The important property is ordering: the sender invoice is not settled until the recipient-side Fiber payment has completed.
+
+## What This Proves
+
+For a successful order, there are three useful proof points.
+
+First, the sender-side payment succeeds:
+
+```text
+sender get_payment(payment_hash) => Success
+```
+
+Second, the LSP order completes:
+
+```text
+get_order_status(order_id) => COMPLETED
+invoice_status => Paid
+```
+
+Third, the recipient receives Fiber balance in a channel it did not pre-create:
+
+```text
+recipient list_channels before payment => []
+recipient list_channels after payment => ChannelReady
+recipient channel is_acceptor => true
+recipient channel is_one_way => true
+recipient local_balance increases by the net payment amount
+```
+
+The on-chain funding transaction for the recipient channel can be read from `channel_outpoint`. The first 32 bytes are the CKB transaction hash; the final 4 bytes are the output index.
+
+Example:
+
+```text
+channel_outpoint: 0x5a0964d46f1620af6e5ea590ae304583a9f6eb6a936fa9c57b28434917b054ad00000000
+funding tx hash: 0x5a0964d46f1620af6e5ea590ae304583a9f6eb6a936fa9c57b28434917b054ad
+output index: 00000000
+```
+
+The Fiber payment itself is off-chain. The funding transaction proves the channel was created on CKB; Fiber RPC state proves the payment and settlement outcome.
+
+## What This Does Not Claim
+
+This project does not claim that the recipient needs no CKB at all.
+
+In the current Fiber testnet behavior, the recipient still needs a small CKB reserve to accept channels and maintain the required cells. The useful claim is narrower and more accurate:
+
+```text
+The recipient does not pre-fund inbound liquidity.
+The LSP funds/provisions the recipient-side channel when payment demand arrives.
+```
+
+This project also does not implement a Fiber protocol fork, native payment interception, custom PTLC/TLC logic, or a marketplace. It uses Fiber node JSON-RPC as it exists today.
+
+## Repository Layout
+
+```text
+crates/lspd/       LSP daemon and JSON-RPC API
+demo-ui/           Local browser dashboard for the demo flow
+scripts/           Fiber build, demo node setup, start/stop, and payment scripts
+```
+
+Runtime data, logs, Fiber binaries, downloaded Fiber source, and local CKB tooling are ignored by Git.
+
+## Requirements
+
+- Rust toolchain with `cargo` and `rustc`
+- `git`
+- `jq`
+- `curl`
+- Node.js 20 or newer for the demo UI
+- CKB testnet funds for the demo nodes
+
+The scripts build Fiber `v0.8.1` locally from the Nervos repository.
+
+## Build
+
+Check local requirements:
+
+```bash
+scripts/check-env.sh
+```
+
+Build the LSP daemon:
+
+```bash
+cargo check -p lspd
+```
+
+Build local Fiber binaries:
+
+```bash
+scripts/prepare-fiber.sh
+```
+
+## Demo Setup
+
+Initialize three local Fiber runtime directories:
+
+```bash
+scripts/init-demo-nodes.sh
+```
+
+This creates:
+
+```text
+runtime/sender     RPC 8627, P2P 8628
+runtime/lsp        RPC 8727, P2P 8728
+runtime/recipient  RPC 8827, P2P 8828
+```
+
+Before running the full demo, fund the three generated CKB keys on testnet. The exact funding amount depends on the testnet state and payment size, but the LSP must have enough CKB to open recipient channels, the sender must have enough CKB to open a channel to the LSP, and the recipient must have enough reserve to accept the channel.
+
+Start the demo stack:
+
+```bash
+scripts/demo-start.sh
+```
+
+This starts the three Fiber nodes, connects peers, ensures sender-to-LSP liquidity, starts `lspd`, and starts the local UI.
+
+Open the UI:
+
+```text
+http://127.0.0.1:5173
+```
+
+Run a scripted payment:
+
+```bash
+scripts/demo-run-payment.sh 1000000000
+```
+
+Amounts are in shannons. `1000000000` is `10 CKB`.
+
+Stop the demo stack:
+
+```bash
+scripts/demo-stop.sh
+```
+
+## JSON-RPC API
+
+The daemon exposes JSON-RPC over HTTP.
+
+### `get_info`
+
+Returns daemon configuration and LSP Fiber node information.
+
+```bash
+curl -sS -H 'content-type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"get_info","params":{},"id":1}' \
+  http://127.0.0.1:3002
+```
+
+### `buy`
+
+Creates an order and a sender-facing Fiber invoice.
+
+```json
+{
+  "recipient_pubkey": "<recipient fiber pubkey>",
+  "recipient_address": "/ip4/127.0.0.1/tcp/8828",
+  "amount": "1000000000"
+}
+```
+
+### `get_order_status`
+
+Returns the current order state, fee/net amounts, invoice status, audit events, and recipient channel snapshots.
+
+```json
+{
+  "order_id": "<order id>"
+}
+```
+
+## Operational Notes
+
+Fiber channel and payment state persists in each node runtime directory. Failed or interrupted payment attempts can leave inflight TLCs that consume channel liquidity until Fiber clears them. For a clean recording or reproducible test, start with fresh runtime directories or wait for stale inflight payments to expire.
+
+The demo uses a local password default for generated demo keys. Do not reuse the demo runtime directories or keys for production funds.
+
+## Current Limitations
+
+- Orders are stored in memory. Restarting the daemon loses order records.
+- Channel funding policy is intentionally simple and CKB-focused.
+- There is no authentication on the demo JSON-RPC API.
+- Retry and recovery behavior is minimal.
+- Liquidity accounting is good enough for the demo path, not yet a production treasury system.
+- The recipient still needs a small CKB reserve to accept Fiber channels.
+
+## Why This Matters
+
+Receive-first liquidity is a real adoption issue for wallets and merchants. A user should not have to understand inbound liquidity before receiving a first payment. This prototype shows one practical integration path for Fiber: a wallet, merchant backend, or node operator can delegate just-in-time recipient liquidity to an LSP without changing the Fiber protocol.
+
+The next steps toward production are persistence, policy configuration, authenticated APIs, better retry handling, richer liquidity accounting, and wallet-facing SDK bindings.

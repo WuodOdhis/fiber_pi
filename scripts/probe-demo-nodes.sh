@@ -49,12 +49,12 @@ echo "[probe] waiting for RPC services"
 sleep 12
 
 echo "[probe] querying sender"
-"$FNN_CLI" -u http://127.0.0.1:8327 -o json --no-banner info
+"$FNN_CLI" -u http://127.0.0.1:8627 -o json --no-banner info
 
 echo "[probe] querying lsp"
-"$FNN_CLI" -u http://127.0.0.1:8427 -o json --no-banner info
+"$FNN_CLI" -u http://127.0.0.1:8727 -o json --no-banner info
 
 echo "[probe] querying recipient"
-"$FNN_CLI" -u http://127.0.0.1:8527 -o json --no-banner info
+"$FNN_CLI" -u http://127.0.0.1:8827 -o json --no-banner info
 
 echo "[probe] all node RPC endpoints responded"
