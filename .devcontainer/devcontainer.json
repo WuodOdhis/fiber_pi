@@ -1,0 +1,17 @@
+{
+  "name": "Fiber LSP",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y jq curl pkg-config libssl-dev clang protobuf-compiler perl && cargo check -p lspd",
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": {
+      "label": "Fiber LSP Demo UI",
+      "visibility": "public"
+    }
+  }
+}

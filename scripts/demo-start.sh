@@ -16,6 +16,7 @@ LSP_P2P_PORT="${DEMO_LSP_P2P_PORT:-8728}"
 RECIPIENT_P2P_PORT="${DEMO_RECIPIENT_P2P_PORT:-8828}"
 LSPD_PORT="${DEMO_LSPD_PORT:-3002}"
 UI_PORT="${DEMO_UI_PORT:-5173}"
+UI_HOST="${DEMO_UI_HOST:-127.0.0.1}"
 DEMO_AMOUNT="${DEMO_AMOUNT:-1000000000}"
 REQUIRED_OUTBOUND="${DEMO_REQUIRED_OUTBOUND:-$DEMO_AMOUNT}"
 SENDER_CHANNEL_AMOUNT="${DEMO_SENDER_CHANNEL_AMOUNT:-20000000000}"
@@ -207,6 +208,7 @@ start_ui() {
 
   (
     cd "$ROOT_DIR/demo-ui"
+    DEMO_UI_HOST="$UI_HOST" \
     DEMO_UI_PORT="$UI_PORT" \
     LSPD_URL="$LSPD_URL" \
     SENDER_FIBER_URL="$SENDER_URL" \
@@ -221,7 +223,7 @@ start_ui() {
 
   for _ in $(seq 1 30); do
     if curl -sS "http://127.0.0.1:$UI_PORT/api/config" >/dev/null 2>&1; then
-      echo "[ready] demo-ui url=http://127.0.0.1:$UI_PORT"
+      echo "[ready] demo-ui url=http://$UI_HOST:$UI_PORT"
       return 0
     fi
     sleep 1
