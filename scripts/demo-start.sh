@@ -222,7 +222,10 @@ start_ui() {
   )
 
   for _ in $(seq 1 30); do
-    if curl -sS "http://127.0.0.1:$UI_PORT/api/config" >/dev/null 2>&1; then
+    if curl -sS "http://127.0.0.1:$UI_PORT/api/config" >/dev/null 2>&1 \
+      && curl -sS -H 'content-type: application/json' \
+        --data '{"target":"recipient","payload":{"jsonrpc":"2.0","method":"list_channels","params":[{"include_closed":false}],"id":1}}' \
+        "http://127.0.0.1:$UI_PORT/api/rpc" | jq -e '.result.channels != null' >/dev/null 2>&1; then
       echo "[ready] demo-ui url=http://$UI_HOST:$UI_PORT"
       return 0
     fi

@@ -19,7 +19,10 @@ const els = {
   log: document.querySelector("#log"),
 };
 
-boot();
+boot().catch((err) => {
+  setStatus("not ready", "bad");
+  log("error", err.message || String(err));
+});
 
 async function boot() {
   state.config = await fetch("/api/config").then((res) => res.json());
@@ -31,33 +34,39 @@ async function boot() {
 
 async function runDemo() {
   els.runBtn.disabled = true;
-  setStatus("running", "run");
-  state.before = await recipientSnapshot();
-  renderBalances();
-  log("snapshot", `recipient local=${formatAmount(state.before.localBalance)} remote=${formatAmount(state.before.remoteBalance)}`);
+  try {
+    setStatus("running", "run");
+    state.before = await recipientSnapshot();
+    renderBalances();
+    log("snapshot", `recipient local=${formatAmount(state.before.localBalance)} remote=${formatAmount(state.before.remoteBalance)}`);
 
-  const buy = await rpc("lspd", "buy", {
-    recipient_pubkey: state.config.recipientPubkey,
-    recipient_address: state.config.recipientAddress,
-    amount: els.amount.value,
-  });
-  state.order = buy.result;
-  renderOrder();
-  log("buy", `order=${state.order.order_id} invoice=${short(state.order.invoice)} net=${formatAmount(state.order.net_amount)}`);
+    const buy = await rpc("lspd", "buy", {
+      recipient_pubkey: state.config.recipientPubkey,
+      recipient_address: state.config.recipientAddress,
+      amount: els.amount.value,
+    });
+    state.order = buy.result;
+    renderOrder();
+    log("buy", `order=${state.order.order_id} invoice=${short(state.order.invoice)} net=${formatAmount(state.order.net_amount)}`);
 
-  const pay = await rpc("sender", "send_payment", [{
-    invoice: state.order.invoice,
-    timeout: "0x258",
-    max_fee_amount: "0x77359400",
-  }]);
-  state.senderPayment = pay.result;
-  log("sender", `payment_hash=${state.senderPayment.payment_hash} status=${state.senderPayment.status}`);
+    const pay = await rpc("sender", "send_payment", [{
+      invoice: state.order.invoice,
+      timeout: "0x258",
+      max_fee_amount: "0x77359400",
+    }]);
+    state.senderPayment = pay.result;
+    log("sender", `payment_hash=${state.senderPayment.payment_hash} status=${state.senderPayment.status}`);
 
-  await pollOrder(state.order.order_id, state.senderPayment.payment_hash);
-  state.after = await recipientSnapshot();
-  renderBalances();
-  await refreshChannels();
-  els.runBtn.disabled = false;
+    await pollOrder(state.order.order_id, state.senderPayment.payment_hash);
+    state.after = await recipientSnapshot();
+    renderBalances();
+    await refreshChannels();
+  } catch (err) {
+    setStatus("failed", "bad");
+    log("error", err.message || String(err));
+  } finally {
+    els.runBtn.disabled = false;
+  }
 }
 
 async function pollOrder(orderId, paymentHash) {
@@ -115,6 +124,7 @@ async function rpc(target, method, params) {
     body: JSON.stringify({ target, payload }),
   });
   const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   if (data.error) throw new Error(data.error.message || data.error);
   return data;
 }
