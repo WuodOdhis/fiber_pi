@@ -1,30 +1,34 @@
-# Demo Guide
+# Demo Runbook
 
-This guide is for recording or screenshotting the receive-first payment demo from a clean state.
+This runbook describes how to run a clean receive-first payment demo on CKB testnet.
 
-Use the terminal as the source of truth and the browser UI as the visual layer. The terminal gives the clearest proof. The UI gives a readable screenshot of the order lifecycle.
+The demo uses three local Fiber nodes:
 
-## Goal
+```text
+sender     pays the LSP invoice
+lsp        runs the funded LSP Fiber node used by lspd
+recipient  starts without a Fiber channel and receives the net payment
+```
 
-Show this sequence:
+The goal is to demonstrate the following sequence:
 
-1. The recipient starts with zero Fiber channels.
-2. The sender pays an LSP invoice.
-3. The LSP opens/provisions recipient-side liquidity.
+1. The recipient starts with zero open Fiber channels.
+2. The sender pays a Fiber invoice issued by the LSP.
+3. The LSP provisions recipient-side liquidity by opening a private one-way Fiber channel when needed.
 4. The LSP pays the recipient over Fiber.
-5. The sender invoice is settled only after the recipient payment succeeds.
-6. The recipient ends with Fiber local balance in a channel it did not pre-create.
+5. The LSP settles the sender invoice only after the recipient payment succeeds.
+6. The recipient ends with non-zero Fiber `local_balance` in a channel it did not pre-create.
 
-## Clean Recording Nodes
+## Clean Runtime
 
-For a clean recording, do not reuse old runtime directories. Failed or interrupted Fiber payments can leave inflight TLCs that temporarily consume liquidity.
+Use fresh runtime directories for a clean first-receive demonstration. Failed or interrupted Fiber payments can leave inflight TLCs that temporarily consume channel liquidity.
 
-Create a separate recording node set:
+Create a named demo node set:
 
 ```bash
-DEMO_SENDER_NODE=record-sender \
-DEMO_LSP_NODE=record-lsp \
-DEMO_RECIPIENT_NODE=record-recipient \
+DEMO_SENDER_NODE=demo-sender \
+DEMO_LSP_NODE=demo-lsp \
+DEMO_RECIPIENT_NODE=demo-recipient \
 DEMO_SENDER_RPC_PORT=8927 \
 DEMO_SENDER_P2P_PORT=8928 \
 DEMO_LSP_RPC_PORT=9027 \
@@ -34,38 +38,30 @@ DEMO_RECIPIENT_P2P_PORT=9128 \
 scripts/init-demo-nodes.sh
 ```
 
-Print the CKB testnet addresses for funding:
+Print the generated CKB testnet addresses:
 
 ```bash
-scripts/demo-addresses.sh record-sender record-lsp record-recipient
+scripts/demo-addresses.sh demo-sender demo-lsp demo-recipient
 ```
 
-Suggested testnet funding for a small `10 CKB` demo:
+Suggested funding for a small `10 CKB` testnet payment:
 
 ```text
-record-sender:    500 CKB or more
-record-lsp:       500 CKB or more
-record-recipient: 221 CKB
+demo-sender:    500 CKB or more
+demo-lsp:       500 CKB or more
+demo-recipient: 221 CKB
 ```
 
-For a larger `100 CKB` demo, fund more generously:
-
-```text
-record-sender:    1500 CKB or more
-record-lsp:       2500 CKB or more
-record-recipient: 221 CKB
-```
-
-The recipient funding is not inbound liquidity. It is the reserve needed by current Fiber/CKB channel acceptor mechanics.
+For larger payments, fund sender and LSP more generously. Recipient funding is not inbound liquidity; it is a CKB reserve needed by current Fiber/CKB channel acceptor mechanics.
 
 ## Start The Stack
 
-Use the same node names and ports when starting the demo:
+Start the three Fiber nodes, `lspd`, and the demo UI:
 
 ```bash
-DEMO_SENDER_NODE=record-sender \
-DEMO_LSP_NODE=record-lsp \
-DEMO_RECIPIENT_NODE=record-recipient \
+DEMO_SENDER_NODE=demo-sender \
+DEMO_LSP_NODE=demo-lsp \
+DEMO_RECIPIENT_NODE=demo-recipient \
 DEMO_SENDER_RPC_PORT=8927 \
 DEMO_SENDER_P2P_PORT=8928 \
 DEMO_LSP_RPC_PORT=9027 \
@@ -74,8 +70,18 @@ DEMO_RECIPIENT_RPC_PORT=9127 \
 DEMO_RECIPIENT_P2P_PORT=9128 \
 DEMO_LSPD_PORT=3003 \
 DEMO_UI_PORT=5174 \
+DEMO_AMOUNT=1000000000 \
 scripts/demo-start.sh
 ```
+
+The script performs preflight checks:
+
+- starts the configured Fiber nodes;
+- connects sender to LSP and LSP to recipient;
+- ensures sender outbound liquidity for the configured demo amount;
+- reports the recipient open-channel count;
+- starts `lspd`;
+- starts the browser UI.
 
 Open the UI:
 
@@ -83,9 +89,9 @@ Open the UI:
 http://127.0.0.1:5174
 ```
 
-## Screenshot 1: Recipient Has Zero Channels
+## Verify Initial Recipient State
 
-Before running a payment, capture this terminal output:
+Before running a payment, the recipient should have no open channels:
 
 ```bash
 curl -sS -H 'content-type: application/json' \
@@ -93,7 +99,7 @@ curl -sS -H 'content-type: application/json' \
   http://127.0.0.1:9127 | jq .
 ```
 
-Expected clean output:
+Expected result:
 
 ```json
 {
@@ -105,13 +111,9 @@ Expected clean output:
 }
 ```
 
-This is the first proof point: the recipient did not start with inbound liquidity.
+## Run A Payment
 
-Also take a UI screenshot before payment. The recipient channel table should be empty or show zero before-balance.
-
-## Run The Payment
-
-Use a small amount for the most reliable recording:
+Run a `10 CKB` payment:
 
 ```bash
 DEMO_SENDER_URL=http://127.0.0.1:8927 \
@@ -123,29 +125,17 @@ scripts/demo-run-payment.sh 1000000000
 
 `1000000000` shannons is `10 CKB`.
 
-Wait for:
+Successful completion prints:
 
 ```text
 COMPLETED | recipient paid ...; Fiber invoice settled; LSP fee earned ...
 ```
 
-If the order stays in `OPENING_CHANNEL`, the usual cause is that the recipient channel funding transaction has not reached ready state yet. Give it more time. If it fails because of insufficient balance, restart with fresh nodes or fund the sender/LSP more generously.
+The same flow can also be run from the demo UI.
 
-## Screenshot 2: Completed Order
+## Verify Final State
 
-After the script completes, capture the final terminal result and the UI.
-
-The UI should show:
-
-- status `COMPLETED`;
-- gross amount, fee, and net amount;
-- audit trail from `AWAITING_PAYMENT` to `COMPLETED`;
-- recipient channel before/after balance;
-- channel outpoint.
-
-## Screenshot 3: Recipient Received Without Pre-Funding Inbound Liquidity
-
-Query the recipient again:
+Query the recipient after completion:
 
 ```bash
 curl -sS -H 'content-type: application/json' \
@@ -153,7 +143,7 @@ curl -sS -H 'content-type: application/json' \
   http://127.0.0.1:9127 | jq .
 ```
 
-Look for these fields:
+Important fields:
 
 ```text
 state.state_name: ChannelReady
@@ -166,13 +156,13 @@ channel_outpoint: on-chain funding outpoint
 Interpretation:
 
 - `is_acceptor: true` means the recipient accepted the channel.
-- The LSP side of the same channel has `is_acceptor: false`, which shows the LSP opened/funded it.
+- The LSP side of the same channel has `is_acceptor: false`, showing the LSP opened/funded the channel.
 - `local_balance` on the recipient side is the Fiber balance received.
 - `channel_outpoint` points to the CKB funding transaction for the channel.
 
-## Screenshot 4: Funding Transaction Hash
+## Channel Funding Transaction
 
-The recipient channel response includes a `channel_outpoint` like this:
+The recipient channel response includes a `channel_outpoint`:
 
 ```text
 0x5a0964d46f1620af6e5ea590ae304583a9f6eb6a936fa9c57b28434917b054ad00000000
@@ -185,9 +175,7 @@ funding tx hash: 0x5a0964d46f1620af6e5ea590ae304583a9f6eb6a936fa9c57b28434917b05
 output index:     00000000
 ```
 
-Use that transaction hash on a CKB testnet explorer or with CKB RPC to show that an on-chain Fiber channel funding transaction exists.
-
-This proves channel creation. The payment itself is a Fiber off-chain payment, so its proof is the Fiber payment/order state:
+The funding transaction proves that a Fiber channel was opened on CKB. The payment itself is off-chain, so its proof comes from Fiber RPC state:
 
 ```text
 sender get_payment(payment_hash) => Success
@@ -214,7 +202,7 @@ curl -sS -H 'content-type: application/json' \
   http://127.0.0.1:8927 | jq .
 ```
 
-Check LSP side of the recipient channel:
+Check the LSP-side channel view:
 
 ```bash
 curl -sS -H 'content-type: application/json' \
@@ -222,28 +210,15 @@ curl -sS -H 'content-type: application/json' \
   http://127.0.0.1:9027 | jq .
 ```
 
-## What To Say In The Demo
-
-Use this wording:
-
-```text
-The recipient starts with zero Fiber channels, so there is no pre-created inbound liquidity.
-The sender pays an invoice issued by the LSP.
-The LSP then opens a one-way channel to the recipient and pays the recipient net amount over Fiber.
-Only after the recipient payment succeeds does the LSP settle the sender invoice.
-The channel funding transaction is visible through channel_outpoint, while the Fiber payment result is visible through get_payment and get_order_status.
-The recipient still needs a small CKB reserve to accept the channel, so the claim is not zero CKB. The claim is no pre-funded inbound liquidity.
-```
-
 ## Cleanup
 
-Stop the recording stack:
+Stop the configured stack:
 
 ```bash
-DEMO_SENDER_NODE=record-sender \
-DEMO_LSP_NODE=record-lsp \
-DEMO_RECIPIENT_NODE=record-recipient \
+DEMO_SENDER_NODE=demo-sender \
+DEMO_LSP_NODE=demo-lsp \
+DEMO_RECIPIENT_NODE=demo-recipient \
 scripts/demo-stop.sh
 ```
 
-If you want another fully clean recording, create another node set with new names and ports instead of reusing a runtime that has failed or interrupted attempts.
+For another clean first-receive run, create a new runtime node set with fresh names and ports.

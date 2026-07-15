@@ -211,7 +211,7 @@ Returns the current order state, fee/net amounts, invoice status, audit events, 
 
 ## Operational Notes
 
-Fiber channel and payment state persists in each node runtime directory. Failed or interrupted payment attempts can leave inflight TLCs that consume channel liquidity until Fiber clears them. For a clean recording or reproducible test, start with fresh runtime directories or wait for stale inflight payments to expire.
+Fiber channel and payment state persists in each node runtime directory. Failed or interrupted payment attempts can leave inflight TLCs that consume channel liquidity until Fiber clears them. For a clean first-receive demo, start with fresh runtime directories or wait for stale inflight payments to expire.
 
 The demo uses a local password default for generated demo keys. Do not reuse the demo runtime directories or keys for production funds.
 

@@ -1,8 +1,8 @@
-# GitHub Codespaces Demo
+# GitHub Codespaces Deployment
 
-Use this when a VPS is not available. Codespaces can host the full testnet demo stack and expose the browser UI through a forwarded public port.
+GitHub Codespaces can run the full Fiber testnet demo stack without a separate VPS. The deployment is intended for a short-lived live demo environment, not permanent hosting.
 
-The live demo runs inside one Codespace:
+The Codespace runs:
 
 ```text
 codespace-sender     Fiber demo sender node
@@ -12,21 +12,19 @@ lspd                 receive-first LSP daemon
 demo-ui              browser dashboard exposed on port 5173
 ```
 
-Only the UI port needs to be public. The Fiber RPC ports stay local inside the Codespace.
+Only the UI port needs public visibility. Fiber RPC ports remain local inside the Codespace.
 
-## 1. Create The Codespace
+## Create A Codespace
 
-Open the repository on GitHub and create a Codespace on `main`.
+Create a Codespace on the repository `main` branch. The devcontainer installs Rust, Node.js, `jq`, `curl`, OpenSSL headers, Clang, and protobuf tooling.
 
-The devcontainer installs Rust, Node.js, `jq`, `curl`, OpenSSL headers, Clang, and protobuf tooling. It also runs:
+The devcontainer also runs:
 
 ```bash
 cargo check -p lspd
 ```
 
-## 2. Build Fiber
-
-In the Codespaces terminal:
+## Build Fiber
 
 ```bash
 scripts/prepare-fiber.sh
@@ -34,7 +32,7 @@ scripts/prepare-fiber.sh
 
 This builds Fiber `v0.8.1` and copies `fnn` and `fnn-cli` into `.fiber-bin/`.
 
-## 3. Create Fresh Demo Nodes
+## Create Demo Nodes
 
 ```bash
 DEMO_SENDER_NODE=codespace-sender \
@@ -45,13 +43,26 @@ scripts/init-demo-nodes.sh
 
 This creates ignored runtime directories under `runtime/`.
 
-## 4. Print Funding Addresses
+## Install ckb-cli If Needed
+
+`scripts/demo-addresses.sh` uses `ckb-cli` to derive testnet addresses. If `ckb-cli` is missing, install the Linux release:
+
+```bash
+mkdir -p .ckb-cli
+curl -L \
+  https://github.com/nervosnetwork/ckb-cli/releases/download/v2.0.0/ckb-cli_v2.0.0_x86_64-unknown-linux-gnu.tar.gz \
+  -o /tmp/ckb-cli.tar.gz
+tar -xzf /tmp/ckb-cli.tar.gz -C .ckb-cli
+chmod +x .ckb-cli/ckb-cli_v2.0.0_x86_64-unknown-linux-gnu/ckb-cli
+```
+
+## Print Funding Addresses
 
 ```bash
 scripts/demo-addresses.sh codespace-sender codespace-lsp codespace-recipient
 ```
 
-Fund these testnet addresses:
+Suggested testnet funding for a `10 CKB` payment:
 
 ```text
 codespace-sender:    500 CKB or more
@@ -59,35 +70,29 @@ codespace-lsp:       500 CKB or more
 codespace-recipient: 221 CKB
 ```
 
-For a larger demo, fund sender and LSP more generously.
-
 The recipient funding is not inbound liquidity. It is the CKB reserve needed by current Fiber/CKB channel acceptor mechanics.
 
-## 5. Start The Live Demo Stack
+## Start The Stack
 
 ```bash
 scripts/codespaces-demo-start.sh
 ```
 
-Wait for:
+The command starts the three Fiber nodes, connects peers, checks sender outbound liquidity, verifies recipient channel count, starts `lspd`, and starts the UI on `0.0.0.0:5173`.
+
+Successful startup prints:
 
 ```text
 [done] demo stack is ready
 ```
 
-The script starts the three Fiber nodes, connects peers, checks sender outbound liquidity, verifies recipient channel count, starts `lspd`, and starts the UI on `0.0.0.0:5173`.
+## Expose The UI
 
-## 6. Make Port 5173 Public
+In the Codespaces **Ports** tab, set port `5173` to public visibility and open the forwarded URL.
 
-In the Codespaces **Ports** tab, find port `5173`.
+## Verify Initial State
 
-Set visibility to **Public** if it is not already public.
-
-Open the forwarded URL. This is the live demo URL you can submit to judges.
-
-## 7. Prove Recipient Starts With Zero Channels
-
-Before running the payment:
+Before running a payment, the recipient should have no open channels:
 
 ```bash
 curl -sS -H 'content-type: application/json' \
@@ -95,7 +100,7 @@ curl -sS -H 'content-type: application/json' \
   http://127.0.0.1:8827 | jq .
 ```
 
-Expected:
+Expected result:
 
 ```json
 {
@@ -107,23 +112,23 @@ Expected:
 }
 ```
 
-## 8. Run A Payment
-
-Use `10 CKB` for the most reliable demo:
+## Run A Payment
 
 ```bash
 scripts/codespaces-demo-pay.sh 1000000000
 ```
 
-Wait for:
+`1000000000` shannons is `10 CKB`.
+
+Successful completion prints:
 
 ```text
 COMPLETED | recipient paid ...; Fiber invoice settled; LSP fee earned ...
 ```
 
-## 9. Proof Points For Reviewers
+The same payment flow can be run from the browser dashboard.
 
-After completion, show:
+## Verify Final State
 
 ```bash
 curl -sS -H 'content-type: application/json' \
@@ -143,20 +148,14 @@ channel_outpoint: on-chain funding outpoint
 
 The `channel_outpoint` contains the CKB funding transaction hash. The first 32 bytes are the tx hash, and the final 4 bytes are the output index.
 
-## 10. Keep The Codespace Alive
+## Operating Notes
 
-Codespaces can stop after inactivity. During judging, keep it running or restart it and run:
+Codespaces can stop after inactivity. To restore the live stack, start the Codespace and run:
 
 ```bash
 scripts/codespaces-demo-start.sh
 ```
 
-If the recipient no longer has zero channels because you already ran the demo, create a new node set with new names, fund the new addresses, and start again.
+If a completely clean first-receive state is needed after a payment has already been run, create a fresh node set, fund the new addresses, and start the stack with those node names.
 
-## Submission Note
-
-Use this wording:
-
-```text
-The live demo is hosted in GitHub Codespaces. It runs a self-contained Fiber testnet stack: sender node, LSP node, recipient node, lspd daemon, and dashboard. Only the dashboard port is public; Fiber RPC services remain local inside the Codespace. All funds are testnet-only.
-```
+All funds in this deployment flow are testnet-only.
