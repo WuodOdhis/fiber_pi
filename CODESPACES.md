@@ -2,6 +2,8 @@
 
 GitHub Codespaces can run the full Fiber testnet demo stack without a separate VPS. The deployment is intended for a short-lived live demo environment, not permanent hosting.
 
+Codespaces can sleep or restart after inactivity. The demo can be restored by rerunning the start command, but runtime channel state is persistent inside the Codespace while the runtime directories remain. This means a recipient that has already received once is no longer a clean zero-channel recipient.
+
 The Codespace runs:
 
 ```text
@@ -159,3 +161,29 @@ scripts/codespaces-demo-start.sh
 If a completely clean first-receive state is needed after a payment has already been run, create a fresh node set, fund the new addresses, and start the stack with those node names.
 
 All funds in this deployment flow are testnet-only.
+
+## Repeated Demo Runs
+
+The startup script opens or reuses the sender-to-LSP channel because the sender needs outbound liquidity to pay the LSP invoice. That setup channel is expected and does not invalidate the receive-first claim.
+
+The recipient-side channel is different. On a fresh first-receive demo, the recipient should start with:
+
+```text
+recipient list_channels => []
+```
+
+After a successful payment, the recipient will have a `ChannelReady` one-way channel and non-zero local balance. Running another payment with the same recipient demonstrates reuse of existing recipient liquidity, not the zero-channel first-receive path.
+
+For another first-receive demonstration, create and fund a new recipient node or a full fresh node set. The relevant values are runtime state and Fiber channel state, not only whether the Codespace has been restarted.
+
+## Production Direction
+
+The Codespaces deployment is a testnet demonstration of the architecture. A production deployment would split responsibilities more carefully:
+
+- a long-running LSP Fiber node with managed liquidity;
+- persistent order storage;
+- authenticated wallet/merchant API access;
+- operational monitoring for channel funding, settlement, and failed payments;
+- policy controls for fees, reserves, min/max payments, and liquidity exposure.
+
+As Fiber exposes more protocol-level hooks, this demo can evolve from RPC polling into a more native LSP service. Native payment interception or hold-payment event subscriptions would let the daemon react to payment demand directly instead of polling invoices and channels.

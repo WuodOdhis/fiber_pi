@@ -6,6 +6,8 @@ The problem is simple: a new wallet, merchant, or service may want to receive a 
 
 This is an MVP, not a production LSP. It is useful because it demonstrates the core receive-first flow with real Fiber RPC calls and real testnet channel state, while keeping the design small enough for wallets and services to inspect or adapt.
 
+The project should be read as a skeleton for a future Fiber LSP service. It proves the orchestration boundary today, then leaves clear upgrade paths for persistence, policy, wallet integration, and deeper protocol-native payment interception as Fiber exposes more application hooks.
+
 ## What Works
 
 The current daemon can:
@@ -85,6 +87,23 @@ The LSP funds/provisions the recipient-side channel when payment demand arrives.
 ```
 
 This project also does not implement a Fiber protocol fork, native payment interception, custom PTLC/TLC logic, or a marketplace. It uses Fiber node JSON-RPC as it exists today.
+
+## Recipient Reserve vs Inbound Liquidity
+
+The distinction between recipient reserve and inbound liquidity is central to the project.
+
+Inbound liquidity is payment capacity in a Fiber channel that lets the recipient receive. In the demo, the recipient starts without that channel capacity. The LSP creates it when there is payment demand.
+
+The CKB reserve is different. Current Fiber/CKB channel acceptance still uses CKB cells and capacity rules. A recipient needs enough CKB capacity to accept and maintain the channel-side cells required by the protocol. That reserve is not the payment liquidity being sold to the sender; it is operating capacity for the recipient node.
+
+In short:
+
+```text
+Not claimed: recipient can receive with zero CKB.
+Claimed: recipient does not pre-fund inbound Fiber liquidity.
+```
+
+This matters for wallets and merchants because the UX problem is inbound liquidity management, not the existence of CKB capacity as a chain resource.
 
 ## Repository Layout
 
@@ -215,6 +234,8 @@ Fiber channel and payment state persists in each node runtime directory. Failed 
 
 The demo uses a local password default for generated demo keys. Do not reuse the demo runtime directories or keys for production funds.
 
+The first run on a fresh recipient proves the receive-first path. Running the demo again against the same recipient no longer proves a zero-channel starting point, because the recipient may already have a channel from the previous run. A repeated run still demonstrates the channel-reuse path. To demonstrate the first-receive path again, create a fresh recipient runtime and fund its CKB reserve.
+
 ## Current Limitations
 
 - Orders are stored in memory. Restarting the daemon loses order records.
@@ -223,6 +244,28 @@ The demo uses a local password default for generated demo keys. Do not reuse the
 - Retry and recovery behavior is minimal.
 - Liquidity accounting is good enough for the demo path, not yet a production treasury system.
 - The recipient still needs a small CKB reserve to accept Fiber channels.
+
+## Integration Roadmap
+
+The current daemon is intentionally small, but it is structured around an integration shape that can grow into a reusable Fiber infrastructure component.
+
+Near-term improvements:
+
+- persistent order storage, so daemon restarts do not lose order state;
+- authenticated API access for wallets, merchant backends, and hosted services;
+- configurable LSP policy for fees, min/max order size, channel size, and CKB reserve assumptions;
+- better retry and recovery for interrupted channel openings or recipient payments;
+- richer liquidity accounting across multiple sender and recipient channels;
+- SDK-style examples for wallet and merchant integration.
+
+Future Fiber-native improvements:
+
+- native payment interception or event hooks, if/when Fiber exposes them;
+- replacing polling-heavy watcher logic with subscription/event-driven order execution;
+- tighter integration with route hints or LSP advertisements;
+- more direct support for receive-first wallet onboarding flows.
+
+If Fiber later exposes protocol-supported interception or hold-payment callbacks, this daemon can move from the current RPC-orchestrated design toward a cleaner native LSP model. The business logic would remain similar: detect payment demand, provision liquidity, pay the recipient, then settle the sender. The main change would be that Fiber itself would provide a more precise event boundary for the LSP to act on.
 
 ## Why This Matters
 

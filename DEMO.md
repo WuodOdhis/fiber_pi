@@ -23,6 +23,12 @@ The goal is to demonstrate the following sequence:
 
 Use fresh runtime directories for a clean first-receive demonstration. Failed or interrupted Fiber payments can leave inflight TLCs that temporarily consume channel liquidity.
 
+The startup flow may create a sender-to-LSP channel before any order is run. That channel is expected because the sender needs outbound liquidity to pay the LSP invoice. The clean-state condition applies to the recipient:
+
+```text
+recipient list_channels => []
+```
+
 Create a named demo node set:
 
 ```bash
@@ -222,3 +228,5 @@ scripts/demo-stop.sh
 ```
 
 For another clean first-receive run, create a new runtime node set with fresh names and ports.
+
+If the same recipient runtime is reused after a successful payment, the next run demonstrates channel reuse rather than the first-receive path. That is still a valid LSP behavior, but it is a different proof point.
