@@ -88,6 +88,10 @@ Successful startup prints:
 [done] demo stack is ready
 ```
 
+Screenshot proof:
+
+![Codespaces Demo Startup](docs/screenshots/codespaces-demo-startup.png)
+
 ## Expose The UI
 
 In the Codespaces **Ports** tab, set port `5173` to public visibility and open the forwarded URL.

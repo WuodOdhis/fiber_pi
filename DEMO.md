@@ -117,6 +117,10 @@ Expected result:
 }
 ```
 
+Screenshot proof:
+
+![Recipient Zero-Channel Proof](docs/screenshots/recipient-zero-channel-proof.png)
+
 ## Run A Payment
 
 Run a `10 CKB` payment:
@@ -138,6 +142,10 @@ COMPLETED | recipient paid ...; Fiber invoice settled; LSP fee earned ...
 ```
 
 The same flow can also be run from the demo UI.
+
+Before payment, the UI shows the recipient channel fields empty:
+
+![Demo UI Before Payment](docs/screenshots/demo-ui-before-payment.png)
 
 ## Verify Final State
 
@@ -165,6 +173,12 @@ Interpretation:
 - The LSP side of the same channel has `is_acceptor: false`, showing the LSP opened/funded the channel.
 - `local_balance` on the recipient side is the Fiber balance received.
 - `channel_outpoint` points to the CKB funding transaction for the channel.
+
+Completed demo screenshots:
+
+![First Receive Completed](docs/screenshots/demo-ui-first-receive-completed.png)
+
+![Audit Trail and Channel Outpoint](docs/screenshots/demo-ui-audit-and-outpoint.png)
 
 ## Channel Funding Transaction
 

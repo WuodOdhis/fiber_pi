@@ -75,6 +75,20 @@ output index: 00000000
 
 The Fiber payment itself is off-chain. The funding transaction proves the channel was created on CKB; Fiber RPC state proves the payment and settlement outcome.
 
+## Reviewer Evidence
+
+The screenshots below show the demo state that matters for review:
+
+- [Demo Runbook Checklist](docs/screenshots/demo-runbook-checklist.png)
+- [Recipient Zero-Channel Proof](docs/screenshots/recipient-zero-channel-proof.png)
+- [LSP Daemon API Listening](docs/screenshots/lspd-api-listening.png)
+- [Demo UI Before Payment](docs/screenshots/demo-ui-before-payment.png)
+- [First Receive Completed](docs/screenshots/demo-ui-first-receive-completed.png)
+- [Audit Trail and Channel Outpoint](docs/screenshots/demo-ui-audit-and-outpoint.png)
+- [Codespaces Demo Startup](docs/screenshots/codespaces-demo-startup.png)
+
+The key screenshot is [First Receive Completed](docs/screenshots/demo-ui-first-receive-completed.png): it shows a fresh recipient moving from `0 CKB` local balance and no channel to `9.9 CKB` local balance after the LSP provisions the channel and pays the recipient. [Audit Trail and Channel Outpoint](docs/screenshots/demo-ui-audit-and-outpoint.png) shows the order reaching `COMPLETED`, the one-way `ChannelReady` recipient channel, and the CKB funding outpoint.
+
 ## What This Does Not Claim
 
 This project does not claim that the recipient needs no CKB at all.
