@@ -15,5 +15,5 @@ nixPkgs = [
   "procps",
   "protobuf",
   "rustc",
-  "tar"
+  "gnutar"
 ]
