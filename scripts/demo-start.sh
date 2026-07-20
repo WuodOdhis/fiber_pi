@@ -179,12 +179,18 @@ start_lspd() {
   pkill -f "target/debug/lspd" >/dev/null 2>&1 || true
   assert_port_free "$LSPD_PORT"
 
+  if [ -x "$ROOT_DIR/target/release/lspd" ]; then
+    lspd_cmd=("$ROOT_DIR/target/release/lspd")
+  else
+    lspd_cmd=(cargo run -q -p lspd)
+  fi
+
   FIBER_RPC_URL="$LSP_URL" \
   LSP_LISTEN_ADDR="127.0.0.1:$LSPD_PORT" \
   POLL_INTERVAL_MS=1000 \
   ORDER_TIMEOUT_SECONDS=7200 \
   RUST_LOG=info \
-  setsid cargo run -q -p lspd \
+  setsid "${lspd_cmd[@]}" \
     > "$LOG_DIR/lspd.log" 2>&1 < /dev/null &
   echo $! > "$LOG_DIR/lspd.pid"
   echo "[start] lspd pid=$(cat "$LOG_DIR/lspd.pid") log=$LOG_DIR/lspd.log"

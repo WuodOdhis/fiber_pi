@@ -17,7 +17,7 @@ For the hackathon reviewer, deploy the full demo as one Railway service. The ser
 The repository includes `railway.json` and `nixpacks.toml`, so Railway should pick up the build and start commands automatically. If Railway asks for them manually, use this build command:
 
 ```bash
-scripts/prepare-fiber.sh && cargo build --release -p lspd && cd demo-ui && npm install
+scripts/railway-build.sh
 ```
 
 Use this start command:
