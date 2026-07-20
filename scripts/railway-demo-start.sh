@@ -64,4 +64,8 @@ cat <<EOF
 [railway] after funding, redeploy or restart this Railway service.
 EOF
 
-exec "$ROOT_DIR/scripts/demo-start.sh"
+"$ROOT_DIR/scripts/demo-start.sh"
+
+echo "[railway] demo stack started; keeping Railway container alive"
+touch "$ROOT_DIR/logs/demo-ui.log" "$ROOT_DIR/logs/lspd.log"
+exec tail -F "$ROOT_DIR/logs/demo-ui.log" "$ROOT_DIR/logs/lspd.log"
