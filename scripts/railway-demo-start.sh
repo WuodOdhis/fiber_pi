@@ -45,10 +45,16 @@ fi
 install_ckb_cli_if_missing
 
 cat <<'EOF'
-[railway] fund these CKB testnet addresses before the demo can complete:
+[railway] funding address output:
 EOF
-CKB_CLI="$CKB_CLI" "$ROOT_DIR/scripts/demo-addresses.sh" \
-  "$DEMO_SENDER_NODE" "$DEMO_LSP_NODE" "$DEMO_RECIPIENT_NODE"
+if ! CKB_CLI="$CKB_CLI" "$ROOT_DIR/scripts/demo-addresses.sh" \
+  "$DEMO_SENDER_NODE" "$DEMO_LSP_NODE" "$DEMO_RECIPIENT_NODE"; then
+  cat <<'EOF'
+[railway] warning: could not print funding addresses with ckb-cli.
+[railway] This can happen because Fiber stores encrypted node keys, while ckb-cli expects plaintext hex keys.
+[railway] If these Railway node addresses were already funded, this warning is safe and startup will continue.
+EOF
+fi
 
 cat <<EOF
 [railway] suggested testnet funding:
