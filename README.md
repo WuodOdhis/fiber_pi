@@ -125,6 +125,8 @@ This matters for wallets and merchants because the UX problem is inbound liquidi
 crates/lspd/       LSP daemon and JSON-RPC API
 demo-ui/           Local browser dashboard for the demo flow
 scripts/           Fiber build, demo node setup, start/stop, and payment scripts
+RAILWAY.md         Railway bind-port and deployment notes
+railway.json       Railway build/start configuration
 ```
 
 Runtime data, logs, Fiber binaries, downloaded Fiber source, and local CKB tooling are ignored by Git.

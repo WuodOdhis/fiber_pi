@@ -17,10 +17,7 @@ impl Config {
     pub fn from_env() -> crate::Result<Self> {
         let fiber_rpc_url =
             std::env::var("FIBER_RPC_URL").unwrap_or_else(|_| "http://127.0.0.1:8427".to_string());
-        let listen_addr = std::env::var("LSP_LISTEN_ADDR")
-            .unwrap_or_else(|_| "127.0.0.1:3001".to_string())
-            .parse()
-            .map_err(|err| crate::Error::Server(format!("invalid LSP_LISTEN_ADDR: {err}")))?;
+        let listen_addr = listen_addr_from_env()?;
 
         Ok(Self {
             fiber_rpc_url,
@@ -34,6 +31,20 @@ impl Config {
             order_timeout_seconds: read_u64("ORDER_TIMEOUT_SECONDS", 7200)?,
         })
     }
+}
+
+fn listen_addr_from_env() -> crate::Result<SocketAddr> {
+    let value = match std::env::var("LSP_LISTEN_ADDR") {
+        Ok(value) => value,
+        Err(_) => match std::env::var("PORT") {
+            Ok(port) => format!("0.0.0.0:{port}"),
+            Err(_) => "127.0.0.1:3001".to_string(),
+        },
+    };
+
+    value
+        .parse()
+        .map_err(|err| crate::Error::Server(format!("invalid LSP_LISTEN_ADDR/PORT: {err}")))
 }
 
 fn read_u128(name: &'static str, default: u128) -> crate::Result<u128> {

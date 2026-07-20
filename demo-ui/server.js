@@ -2,8 +2,8 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 
-const host = process.env.DEMO_UI_HOST || "127.0.0.1";
-const port = Number(process.env.DEMO_UI_PORT || 5173);
+const host = process.env.DEMO_UI_HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
+const port = Number(process.env.DEMO_UI_PORT || process.env.PORT || 5173);
 
 const config = {
   lspdUrl: process.env.LSPD_URL || "http://127.0.0.1:3002",

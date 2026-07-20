@@ -1,0 +1,19 @@
+[phases.setup]
+nixPkgs = [
+  "bash",
+  "cargo",
+  "clang",
+  "coreutils",
+  "curl",
+  "git",
+  "iproute2",
+  "jq",
+  "nodejs_20",
+  "openssl",
+  "perl",
+  "pkg-config",
+  "procps",
+  "protobuf",
+  "rustc",
+  "tar"
+]
