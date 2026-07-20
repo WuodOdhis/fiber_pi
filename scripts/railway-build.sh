@@ -2,14 +2,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RUST_TOOLCHAIN="${RAILWAY_RUST_TOOLCHAIN:-1.85.0}"
+RUST_TOOLCHAIN="${RAILWAY_RUST_TOOLCHAIN:-1.95.0}"
 
 install_rust=0
 if ! command -v cargo >/dev/null 2>&1; then
   install_rust=1
 else
   cargo_minor="$(cargo --version | awk '{print $2}' | cut -d. -f2)"
-  if [ "${cargo_minor:-0}" -lt 85 ]; then
+  if [ "${cargo_minor:-0}" -lt 92 ]; then
     install_rust=1
   fi
 fi

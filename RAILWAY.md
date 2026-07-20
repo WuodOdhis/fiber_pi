@@ -31,6 +31,7 @@ Set these variables:
 ```text
 RUST_LOG=info
 DEMO_AMOUNT=1000000000
+RAILWAY_RUST_TOOLCHAIN=1.95.0
 ```
 
 Attach a Railway volume mounted at:
