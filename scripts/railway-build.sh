@@ -39,12 +39,13 @@ else
   echo "[railway-build] warning: LIBCLANG_PATH not found before Fiber build"
 fi
 
-if command -v clang >/dev/null 2>&1; then
-  clang_builtin_includes="$(clang -print-resource-dir)/include"
+stdbool_header="$(find /nix/store -path '*/include/stdbool.h' -print -quit 2>/dev/null || true)"
+if [ -n "$stdbool_header" ]; then
+  clang_builtin_includes="$(dirname "$stdbool_header")"
   export BINDGEN_EXTRA_CLANG_ARGS="-I$clang_builtin_includes ${BINDGEN_EXTRA_CLANG_ARGS:-}"
   echo "[railway-build] BINDGEN_EXTRA_CLANG_ARGS=$BINDGEN_EXTRA_CLANG_ARGS"
 else
-  echo "[railway-build] warning: clang not found before Fiber build"
+  echo "[railway-build] warning: stdbool.h not found in /nix/store before Fiber build"
 fi
 
 "$ROOT_DIR/scripts/prepare-fiber.sh"
