@@ -39,6 +39,15 @@ else
   echo "[railway-build] warning: LIBCLANG_PATH not found before Fiber build"
 fi
 
+openssl_pc="$(find /nix/store -path '*/lib/pkgconfig/openssl.pc' -print -quit 2>/dev/null || true)"
+if [ -n "$openssl_pc" ]; then
+  openssl_pkgconfig_dir="$(dirname "$openssl_pc")"
+  export PKG_CONFIG_PATH="$openssl_pkgconfig_dir${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+  echo "[railway-build] PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+else
+  echo "[railway-build] warning: openssl.pc not found in /nix/store before lspd build"
+fi
+
 stdbool_header="$(find /nix/store -path '*/include/stdbool.h' -print -quit 2>/dev/null || true)"
 if [ -n "$stdbool_header" ]; then
   clang_builtin_includes="$(dirname "$stdbool_header")"

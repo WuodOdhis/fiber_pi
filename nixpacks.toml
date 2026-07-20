@@ -15,6 +15,7 @@ nixPkgs = [
   "llvmPackages.libclang",
   "nodejs_20",
   "openssl",
+  "openssl.dev",
   "perl",
   "pkg-config",
   "procps",
@@ -23,5 +24,7 @@ nixPkgs = [
 ]
 
 nixLibs = [
+  "gcc.cc.lib",
+  "openssl",
   "llvmPackages.libclang"
 ]
