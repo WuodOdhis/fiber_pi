@@ -8,9 +8,11 @@ nixPkgs = [
   "clang",
   "coreutils",
   "curl",
+  "findutils",
   "git",
   "iproute2",
   "jq",
+  "llvmPackages.libclang",
   "nodejs_20",
   "openssl",
   "perl",
@@ -18,4 +20,8 @@ nixPkgs = [
   "procps",
   "protobuf",
   "gnutar"
+]
+
+nixLibs = [
+  "llvmPackages.libclang"
 ]

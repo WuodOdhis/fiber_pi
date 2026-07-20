@@ -26,6 +26,19 @@ fi
 echo "[railway-build] rustc: $(rustc --version)"
 echo "[railway-build] cargo: $(cargo --version)"
 
+if [ -z "${LIBCLANG_PATH:-}" ]; then
+  libclang_path="$(find /nix/store -path '*/lib/libclang.so*' -print -quit 2>/dev/null || true)"
+  if [ -n "$libclang_path" ]; then
+    export LIBCLANG_PATH="$(dirname "$libclang_path")"
+  fi
+fi
+
+if [ -n "${LIBCLANG_PATH:-}" ]; then
+  echo "[railway-build] LIBCLANG_PATH=$LIBCLANG_PATH"
+else
+  echo "[railway-build] warning: LIBCLANG_PATH not found before Fiber build"
+fi
+
 "$ROOT_DIR/scripts/prepare-fiber.sh"
 cargo build --release -p lspd
 
