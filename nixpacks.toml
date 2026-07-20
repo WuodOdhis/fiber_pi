@@ -1,7 +1,10 @@
+[variables]
+NIXPACKS_RUST_VERSION = "1.85.0"
+NIXPACKS_NO_MUSL = "1"
+
 [phases.setup]
 nixPkgs = [
   "bash",
-  "cargo",
   "clang",
   "coreutils",
   "curl",
@@ -14,6 +17,5 @@ nixPkgs = [
   "pkg-config",
   "procps",
   "protobuf",
-  "rustc",
   "gnutar"
 ]
