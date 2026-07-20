@@ -8,6 +8,18 @@ This is an MVP, not a production LSP. It is useful because it demonstrates the c
 
 The project should be read as a skeleton for a future Fiber LSP service. It proves the orchestration boundary today, then leaves clear upgrade paths for persistence, policy, wallet integration, and deeper protocol-native payment interception as Fiber exposes more application hooks.
 
+## Live Reviewer Demo
+
+The live reviewer demo is hosted on Railway:
+
+```text
+https://fiberpi-production.up.railway.app
+```
+
+The project originally included a GitHub Codespaces demo path. Codespaces was useful for development and early review because it can run the full local Fiber stack, but it can sleep, restart, and lose availability at inconvenient times. For a reviewer-facing hackathon demo, I moved the live environment to Railway so the UI has a stable public URL and the Fiber node runtime can be kept on a persistent Railway volume.
+
+Only the browser UI is public. The sender Fiber node, LSP Fiber node, recipient Fiber node, and `lspd` JSON-RPC API run inside the Railway container on local ports. The reviewer should use the Railway URL above and click `Run demo payment` from the UI.
+
 ## What Works
 
 The current daemon can:
