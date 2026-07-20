@@ -39,6 +39,14 @@ else
   echo "[railway-build] warning: LIBCLANG_PATH not found before Fiber build"
 fi
 
+if command -v clang >/dev/null 2>&1; then
+  clang_builtin_includes="$(clang -print-resource-dir)/include"
+  export BINDGEN_EXTRA_CLANG_ARGS="-I$clang_builtin_includes ${BINDGEN_EXTRA_CLANG_ARGS:-}"
+  echo "[railway-build] BINDGEN_EXTRA_CLANG_ARGS=$BINDGEN_EXTRA_CLANG_ARGS"
+else
+  echo "[railway-build] warning: clang not found before Fiber build"
+fi
+
 "$ROOT_DIR/scripts/prepare-fiber.sh"
 cargo build --release -p lspd
 
